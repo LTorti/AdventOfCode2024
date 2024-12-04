@@ -1,5 +1,5 @@
-use std::fs;
 use std::collections::HashMap;
+use std::fs;
 
 struct Data {
     pub col_1: Vec<u64>,
@@ -19,10 +19,13 @@ fn challenge_01(mut data: Data) -> u64 {
 
 fn challenge_02(data: Data) -> u64 {
     let mut sum = 0;
-    let mut map : HashMap<u64,u64> = HashMap::new();
+    let mut map: HashMap<u64, u64> = HashMap::new();
     for value in data.col_1.iter() {
         if !map.contains_key(value) {
-            map.insert(*value, data.col_2.iter().filter(|&x| *x == *value).count() as u64);
+            map.insert(
+                *value,
+                data.col_2.iter().filter(|&x| *x == *value).count() as u64,
+            );
         }
         sum += value * map.get(value).unwrap();
     }
