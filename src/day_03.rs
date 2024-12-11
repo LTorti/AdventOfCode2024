@@ -21,15 +21,9 @@ fn next_instruction(mem: &str) -> (Option<usize>, usize) {
                 (Some(j), "don't()".len())
             }
         }
-        (Some(i), None) => {
-            (Some(i), "do()".len())
-        }
-        (None, Some(j)) => {
-            (Some(j), "don't()".len())
-        }
-        (None, None) => {
-            (None, 0)
-        }
+        (Some(i), None) => (Some(i), "do()".len()),
+        (None, Some(j)) => (Some(j), "don't()".len()),
+        (None, None) => (None, 0),
     }
 }
 
@@ -118,7 +112,9 @@ mod test {
     #[test]
     fn check_challenge_02() {
         // Arrange
-        let mem = vec!(String::from("xmul(2,4)&mul[3,7]!^don't()_mul(5,5)+mul(32,64](mul(11,8)undo()?mul(8,5))"));
+        let mem = vec![String::from(
+            "xmul(2,4)&mul[3,7]!^don't()_mul(5,5)+mul(32,64](mul(11,8)undo()?mul(8,5))",
+        )];
         // Act
         let actual = challenge_02(&mem);
         // Assert
