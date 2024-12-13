@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 use std::fs;
 
+use rayon::prelude::*;
+
 type Map = Vec<Vec<char>>;
 
 type Trail = HashSet<Position>;
@@ -162,7 +164,7 @@ fn challenge_02(map: &Vec<Vec<char>>) -> usize {
     let start = get_starting_position(map);
 
     trail
-        .iter()
+        .par_iter()
         .filter(|t| **t != start)
         .filter(|t| {
             let blocked_map = blocked_map(t, &map);
