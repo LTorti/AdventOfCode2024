@@ -6,6 +6,7 @@ mod day_05;
 mod day_06;
 mod day_07;
 mod day_08;
+mod day_09;
 
 fn main() {
     println!("Hello, world!");
@@ -25,4 +26,5 @@ fn main() {
     println!("Challenge 07 - part 2: {}", day_07::part_2());
     println!("Challenge 08 - part 1: {}", day_08::part_1());
     println!("Challenge 08 - part 2: {}", day_08::part_2());
+    println!("Challenge 09 - part 1: {}", day_09::part_1());
 }

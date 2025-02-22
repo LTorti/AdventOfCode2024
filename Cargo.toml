@@ -4,5 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rayon = { version = "1.10.0", registry = "artifactory" }
+num = "0.4.3"
+rayon = { version = "1.10.0" }
 regex = "1.11.1"
