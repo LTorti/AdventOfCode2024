@@ -8,6 +8,7 @@ mod day_07;
 mod day_08;
 mod day_09;
 
+
 fn main() {
     println!("Hello, world!");
     println!("Challenge 01 - part 1: {}", day_01::part_1());

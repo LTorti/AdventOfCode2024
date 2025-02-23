@@ -1,6 +1,6 @@
 use num::Integer;
+use std::fmt;
 use std::fmt::{Debug, Display, Formatter};
-use std::fs;
 
 type DiskMap = Vec<usize>;
 
@@ -18,27 +18,29 @@ impl Clone for FileBlock {
     }
 }
 
-impl Copy for FileBlock {}
+impl FileBlock {
+    fn fmt_inner(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            FileBlock::FILE(id) => write!(f, "{}", id),
+            FileBlock::EMPTY => write!(f, "."),
+        }
+    }
+}
 
 impl Debug for FileBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            &FileBlock::FILE(id) => write!(f, "{}", id),
-            &FileBlock::EMPTY => write!(f, "."),
-        }
+        self.fmt_inner(f)
     }
 }
 
 impl Display for FileBlock {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            &FileBlock::FILE(id) => write!(f, "{}", id),
-            &FileBlock::EMPTY => write!(f, "."),
-        }
+        self.fmt_inner(f)
     }
 }
 
 fn unfold_disk_map(disk_map: &DiskMap) -> Vec<FileBlock> {
+    let mut counter = 0;
     let mut file_idx = 0;
     disk_map
         .iter()
@@ -47,8 +49,10 @@ fn unfold_disk_map(disk_map: &DiskMap) -> Vec<FileBlock> {
             if idx.is_even() {
                 let v = vec![FileBlock::FILE(file_idx); value];
                 file_idx += 1;
+                counter += value;
                 v
             } else {
+                counter += value;
                 vec![FileBlock::EMPTY; value]
             }
         })
@@ -74,31 +78,31 @@ fn file_compaction(disk_map: &mut Vec<FileBlock>) {
     }
 }
 
-fn challenge_01(disk_map: &Vec<usize>) -> usize {
-    let mut unfolded_map = unfold_disk_map(&disk_map);
-    file_compaction(&mut unfolded_map);
-    unfolded_map
+fn checksum(disk_map: &Vec<FileBlock>) -> usize {
+    disk_map
         .iter()
         .enumerate()
-        .filter(|(_, block)| match block {
-            &FileBlock::FILE(_) => true,
-            _ => false,
-        })
         .map(|(idx, block)| match block {
             &FileBlock::FILE(id) => idx * id,
-            &FileBlock::EMPTY => unreachable!(),
+            &FileBlock::EMPTY => 0,
         })
         .sum()
 }
 
+fn challenge_01(disk_map: &Vec<usize>) -> usize {
+    let mut unfolded_map = unfold_disk_map(&disk_map);
+    file_compaction(&mut unfolded_map);
+    checksum(&unfolded_map)
+}
+
 fn get_data() -> DiskMap {
-    let mut disk_map: DiskMap = DiskMap::new();
-    for line in fs::read_to_string("data/day09.txt").unwrap().lines() {
-        for c in line.chars() {
-            disk_map.push(c as usize);
-        }
+    let input: &str = include_str!("../data/day09.txt");
+    let mut data = DiskMap::new();
+    for size in input.trim().chars() {
+        let size = size.to_digit(10).unwrap() as usize;
+        data.push(size);
     }
-    disk_map
+    data
 }
 
 pub fn part_1() -> usize {
@@ -166,5 +170,16 @@ mod test {
         file_compaction(&mut actual);
         let zipped = actual.into_iter().zip(expected.chars().into_iter());
         zipped.for_each(|(x, y)| assert_eq!(x.to_string(), y.to_string()));
+    }
+
+    #[test]
+    fn test_dummy() {
+        let data = get_data();
+        assert_eq!(data.len(), 19999);
+        let mut file_blocks = unfold_disk_map(&data);
+        assert_eq!(file_blocks.len(), 95070);
+        file_compaction(&mut file_blocks);
+        assert_eq!(file_blocks.len(), 95070);
+        assert_eq!(checksum(&file_blocks), 6353658451014);
     }
 }
