@@ -39,7 +39,7 @@ impl Display for FileBlock {
     }
 }
 
-fn unfold_disk_map(disk_map: &DiskMap) -> Vec<FileBlock> {
+fn unfold_disk_map(disk_map: &DiskMap) -> Vec<Vec<FileBlock>> {
     let mut counter = 0;
     let mut file_idx = 0;
     disk_map
@@ -56,7 +56,6 @@ fn unfold_disk_map(disk_map: &DiskMap) -> Vec<FileBlock> {
                 vec![FileBlock::EMPTY; value]
             }
         })
-        .flatten()
         .collect()
 }
 
@@ -90,7 +89,10 @@ fn checksum(disk_map: &Vec<FileBlock>) -> usize {
 }
 
 fn challenge_01(disk_map: &Vec<usize>) -> usize {
-    let mut unfolded_map = unfold_disk_map(&disk_map);
+    let mut unfolded_map = unfold_disk_map(&disk_map)
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
     file_compaction(&mut unfolded_map);
     checksum(&unfolded_map)
 }
@@ -146,7 +148,10 @@ mod test {
     #[test]
     fn check_unfolded_disk_map() {
         let expected = "00...111...2...333.44.5555.6666.777.888899";
-        let actual = unfold_disk_map(&get_disk_map());
+        let actual = unfold_disk_map(&get_disk_map())
+            .into_iter()
+            .flatten()
+            .collect::<Vec<FileBlock>>();
         assert_eq!(expected.len(), actual.len());
         assert_eq!(
             expected.chars().filter(|c| *c == '.').count(),
@@ -166,7 +171,10 @@ mod test {
     #[test]
     fn check_compaction() {
         let expected = "0099811188827773336446555566..............";
-        let mut actual = unfold_disk_map(&get_disk_map());
+        let mut actual = unfold_disk_map(&get_disk_map())
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>();
         file_compaction(&mut actual);
         let zipped = actual.into_iter().zip(expected.chars().into_iter());
         zipped.for_each(|(x, y)| assert_eq!(x.to_string(), y.to_string()));
@@ -176,7 +184,10 @@ mod test {
     fn test_dummy() {
         let data = get_data();
         assert_eq!(data.len(), 19999);
-        let mut file_blocks = unfold_disk_map(&data);
+        let mut file_blocks = unfold_disk_map(&data)
+            .into_iter()
+            .flatten()
+            .collect::<Vec<FileBlock>>();
         assert_eq!(file_blocks.len(), 95070);
         file_compaction(&mut file_blocks);
         assert_eq!(file_blocks.len(), 95070);
