@@ -1,29 +1,59 @@
-use num::Integer;
-use std::fmt;
+use num::{Integer, ToPrimitive};
 use std::fmt::{Debug, Display, Formatter};
+use std::{fmt, iter};
 
 type DiskMap = Vec<usize>;
 
 enum FileBlock {
-    FILE(usize),
-    EMPTY,
+    FILE { id: usize, size: usize },
+    EMPTY { size: usize },
+}
+
+impl FileBlock {
+    fn get_size(&self) -> usize {
+        match self {
+            &FileBlock::FILE { size, .. } => size,
+            &FileBlock::EMPTY { size } => size,
+        }
+    }
+
+    fn file(id: usize, size: usize) -> Self {
+        FileBlock::FILE { id, size }
+    }
+
+    fn empty(size: usize) -> Self {
+        FileBlock::EMPTY { size }
+    }
 }
 
 impl Clone for FileBlock {
     fn clone(&self) -> FileBlock {
         match self {
-            &FileBlock::FILE(id) => FileBlock::FILE(id),
-            &FileBlock::EMPTY => FileBlock::EMPTY,
+            &FileBlock::FILE { id, size } => FileBlock::FILE { id, size },
+            &FileBlock::EMPTY { size } => FileBlock::EMPTY { size },
         }
     }
 }
 
 impl FileBlock {
     fn fmt_inner(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let mut c = String::new();
+        let c_size;
         match self {
-            FileBlock::FILE(id) => write!(f, "{}", id),
-            FileBlock::EMPTY => write!(f, "."),
+            FileBlock::FILE { id, size } => {
+                c = format!("{}", id);
+                c_size = *size;
+            }
+            FileBlock::EMPTY { size } => {
+                c.push('.');
+                c_size = *size;
+            }
         }
+        let mut output = String::new();
+        for v in iter::repeat(c).take(c_size) {
+            output.push_str(&v);
+        }
+        write!(f, "{}", output)
     }
 }
 
@@ -39,21 +69,45 @@ impl Display for FileBlock {
     }
 }
 
+impl PartialEq for FileBlock {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            &FileBlock::FILE { id: self_id, size: self_size } => {
+                match other {
+                    &FileBlock::FILE { id: other_id, size: other_size } => self_id == other_id && self_size == other_size,
+                    _ => false,
+                }
+            },
+            &FileBlock::EMPTY { size: self_size } => {
+                match other {
+                    &FileBlock::EMPTY { size: other_size } => self_size == other_size,
+                    _ => false,
+                }
+            }
+        }
+    }
+}
+
+impl Eq for FileBlock {}
+
 fn unfold_disk_map(disk_map: &DiskMap) -> Vec<Vec<FileBlock>> {
-    let mut counter = 0;
     let mut file_idx = 0;
     disk_map
         .iter()
         .enumerate()
         .map(|(idx, &value)| {
             if idx.is_even() {
-                let v = vec![FileBlock::FILE(file_idx); value];
+                let v = vec![
+                    FileBlock::FILE {
+                        id: file_idx,
+                        size: value
+                    };
+                    value
+                ];
                 file_idx += 1;
-                counter += value;
                 v
             } else {
-                counter += value;
-                vec![FileBlock::EMPTY; value]
+                vec![FileBlock::EMPTY { size: value }; value]
             }
         })
         .collect()
@@ -63,8 +117,8 @@ fn file_compaction(disk_map: &mut Vec<FileBlock>) {
     let mut idx = 0;
     let mut reverse_idx = disk_map.len() - 1;
     while idx < reverse_idx {
-        if let FileBlock::FILE(_) = disk_map[reverse_idx] {
-            if let FileBlock::EMPTY = disk_map[idx] {
+        if let FileBlock::FILE { .. } = disk_map[reverse_idx] {
+            if let FileBlock::EMPTY { .. } = disk_map[idx] {
                 disk_map.swap(idx, reverse_idx);
                 idx += 1;
                 reverse_idx -= 1;
@@ -82,8 +136,8 @@ fn checksum(disk_map: &Vec<FileBlock>) -> usize {
         .iter()
         .enumerate()
         .map(|(idx, block)| match block {
-            &FileBlock::FILE(id) => idx * id,
-            &FileBlock::EMPTY => 0,
+            &FileBlock::FILE { id, .. } => idx * id,
+            &FileBlock::EMPTY { .. } => 0,
         })
         .sum()
 }
@@ -112,6 +166,83 @@ pub fn part_1() -> usize {
     challenge_01(&data)
 }
 
+fn build_file_blocks(disk_map: &DiskMap) -> Vec<FileBlock> {
+    let mut file_idx = 0;
+    let mut file_blocks = disk_map
+        .iter()
+        .enumerate()
+        .map(|(idx, &value)| {
+            if idx.is_even() {
+                let v = FileBlock::FILE {
+                    id: file_idx,
+                    size: value,
+                };
+                file_idx += 1;
+                v
+            } else {
+                FileBlock::EMPTY { size: value }
+            }
+        })
+        .collect::<Vec<FileBlock>>();
+    assert_eq!(
+        disk_map
+            .iter()
+            .map(|n| n.to_usize().unwrap())
+            .sum::<usize>(),
+        file_blocks.iter().map(|b| b.get_size()).sum()
+    );
+    file_blocks
+}
+
+fn compact_free_space(fb: &mut Vec<FileBlock>) {
+    loop {
+        let length = fb.len();
+        'outer: for i in 0..fb.len() {
+            if let FileBlock::EMPTY { size: i_size } = fb[i] {
+                for j in i + 1..fb.len() {
+                    if let FileBlock::EMPTY { size: j_size } = fb[j] {
+                        fb[i] = FileBlock::EMPTY { size: i_size + j_size };
+                        fb.remove(j_size);
+                        break 'outer;
+                    }
+                }
+            }
+        }
+        if length == fb.len() {
+            break;
+        }
+    }
+}
+
+fn block_compaction(fb: &mut Vec<FileBlock>) {
+    let mut reverse_idx = fb.len() - 1;
+    while reverse_idx > 0 {
+        if let FileBlock::FILE { id, size } = fb[reverse_idx] {
+            if let Some(free_block_idx) = fb.iter().position(|b| match b {
+                FileBlock::EMPTY { size: free_space } =>  size <= *free_space,
+                _ => false,
+            }) {
+                if free_block_idx < reverse_idx {
+                    let block = fb[reverse_idx].clone();
+                    fb[reverse_idx] = FileBlock::EMPTY {
+                        size: block.get_size(),
+                    };
+                    if fb[free_block_idx].get_size() > size {
+                        fb[free_block_idx] = FileBlock::EMPTY {
+                            size: fb[free_block_idx].get_size() - size,
+                        };
+                        fb.insert(free_block_idx, FileBlock::FILE { id, size });
+                    } else {
+                        fb[free_block_idx] = block.clone();
+                    }
+                }
+            }
+        }
+        compact_free_space(fb);
+        reverse_idx -= 1;
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -137,7 +268,7 @@ mod test {
                 $actual
                     .iter()
                     .filter(|block| match block {
-                        FileBlock::FILE(id) => *id == $id,
+                        FileBlock::FILE { id, .. } => *id == $id,
                         _ => false,
                     })
                     .count()
@@ -158,7 +289,7 @@ mod test {
             actual
                 .iter()
                 .filter(|block| match block {
-                    FileBlock::FILE(_) => false,
+                    FileBlock::FILE { .. } => false,
                     _ => true,
                 })
                 .count()
@@ -176,7 +307,15 @@ mod test {
             .flatten()
             .collect::<Vec<_>>();
         file_compaction(&mut actual);
-        let zipped = actual.into_iter().zip(expected.chars().into_iter());
+        let zipped = actual
+            .iter()
+            .map(|b| match b {
+                FileBlock::FILE { id, .. } => id.to_string(),
+                FileBlock::EMPTY { .. } => ".".to_string(),
+            })
+            .collect::<Vec<String>>()
+            .into_iter()
+            .zip(expected.chars().into_iter());
         zipped.for_each(|(x, y)| assert_eq!(x.to_string(), y.to_string()));
     }
 
@@ -192,5 +331,59 @@ mod test {
         file_compaction(&mut file_blocks);
         assert_eq!(file_blocks.len(), 95070);
         assert_eq!(checksum(&file_blocks), 6353658451014);
+    }
+
+    #[test]
+    fn test_block_compaction() {
+        let data = get_disk_map();
+        let expected = vec![
+            FileBlock::file(0, 2),
+            FileBlock::file(9, 2),
+            FileBlock::file(2, 1),
+            FileBlock::file(1, 3),
+            FileBlock::file(7, 3),
+            FileBlock::empty(1),
+            FileBlock::file(4, 2),
+            FileBlock::empty(1),
+            FileBlock::file(3, 3),
+            FileBlock::empty(1),
+            FileBlock::empty(2),
+            FileBlock::empty(1),
+            FileBlock::file(5, 4),
+            FileBlock::empty(1),
+            FileBlock::file(6, 4),
+            FileBlock::empty(1),
+            FileBlock::empty(3),
+            FileBlock::empty(1),
+            FileBlock::file(8, 4),
+            FileBlock::empty(2),
+        ];
+        let mut actual = build_file_blocks(&data);
+        block_compaction(&mut actual);
+        expected
+            .iter()
+            .zip(actual.iter())
+            .for_each(|(a, b)| assert_eq!(*a, *b));
+    }
+
+    #[test]
+    fn test_part_02() {
+        let data = get_disk_map();
+        let mut file_blocks = build_file_blocks(&data);
+        block_compaction(&mut file_blocks);
+        let mut sum = 0;
+        let mut idx = 0;
+        for block in file_blocks {
+            match block {
+                FileBlock::FILE { id, size } => {
+                    for i in 0..size {
+                        sum += id * (idx + i);
+                    }
+                    idx += size;
+                }
+                _ => (),
+            }
+        }
+        assert_eq!(sum, 28581);
     }
 }
